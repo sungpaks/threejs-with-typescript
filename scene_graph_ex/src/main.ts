@@ -78,9 +78,7 @@ class App {
     const loader = new THREE.TextureLoader();
     const texture = loader.load("/src/textures/sun.png");
     texture.colorSpace = THREE.SRGBColorSpace;
-    const normalMaterial = new THREE.MeshNormalMaterial();
     const material = new THREE.MeshBasicMaterial({
-      //emissive: 0xffff00,
       map: texture,
     });
 
@@ -89,7 +87,6 @@ class App {
     this.solarSystem!.add(sun);
     this.objects.push(sun);
     this.sun = sun;
-    material.needsUpdate = true;
   }
 
   private setupEarth(geometry: THREE.SphereGeometry) {
