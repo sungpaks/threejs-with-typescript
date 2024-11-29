@@ -54,7 +54,7 @@ class App {
     this.scene.add(light);
   }
   private setupModels() {
-    const geometry = new THREE.SphereGeometry(1, 36, 36);
+    const geometry = new THREE.SphereGeometry(1, 60, 60);
     this.setupSolarSystem();
     this.setupSun(geometry);
     this.setupEarth(geometry);
