@@ -1,14 +1,19 @@
 import "./style.css";
 import * as THREE from "three";
-import { FontLoader, TextGeometry } from "three/examples/jsm/Addons.js";
+import {
+  FontLoader,
+  OrbitControls,
+  TextGeometry,
+} from "three/examples/jsm/Addons.js";
 
 class App {
   private renderer: THREE.WebGLRenderer;
   private domApp: HTMLElement;
   private scene: THREE.Scene;
   private camera?: THREE.PerspectiveCamera;
-  private cube?: THREE.Mesh;
-  private text?: THREE.Object3D;
+  private rtScene?: THREE.Scene;
+  private rtCamera?: THREE.Camera;
+  private renderTarget?: THREE.WebGLRenderTarget;
 
   constructor() {
     console.log("hi");
@@ -18,64 +23,153 @@ class App {
     this.domApp.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
+    this.scene.fog = new THREE.Fog(0x000000, 1, 150);
 
     this.setupCamera();
     this.setupLight();
+    this.setupRenderTarget();
     this.setupModels();
+    this.setupControls();
+    this.setupHelpers();
     this.setupEvents();
   }
   private setupCamera() {
     const width = this.domApp.clientWidth;
     const height = this.domApp.clientHeight;
     this.camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 100);
-    this.camera.position.z = 2;
+    this.camera.position.z = 40;
+    this.camera.position.y = 40;
   }
   private setupLight() {
-    const color = 0xffffff;
-    const intensity = 1;
-    const light = new THREE.DirectionalLight(color, intensity);
-    light.position.set(-1, 2, 4);
-    this.scene.add(light);
+    const lights = [];
+    for (let i = 0; i < 2; i++) {
+      lights[i] = new THREE.DirectionalLight(0xffffff, 3);
+      this.scene.add(lights[i]);
+    }
+    lights[0].position.set(0, 200, 0);
+    lights[1].position.set(100, 200, 100);
   }
   private setupModels() {
-    // this.setupCube();
-    this.setupText();
-  }
-
-  private setupCube() {
-    const geometry = new THREE.BoxGeometry(1, 1, 1); //가로,세로,깊이
-    const material = new THREE.MeshPhongMaterial({ color: 0x44aa88 });
-    this.cube = new THREE.Mesh(geometry, material);
-
-    this.scene.add(this.cube);
-  }
-
-  private async setupText() {
-    const loader = new FontLoader();
-    const font = await loader.loadAsync(
-      "https://threejs.org/examples/fonts/helvetiker_regular.typeface.json"
-    );
-    const geometry = new TextGeometry("HELLO!", {
-      font: font,
-      size: 0.2,
-      height: 0.05,
-      curveSegments: 30,
-      bevelEnabled: true,
-      bevelThickness: 0.01,
-      bevelSize: 0.01,
-      bevelSegments: 5,
+    const material = new THREE.MeshBasicMaterial({
+      map: this.renderTarget!.texture,
     });
-    const material = new THREE.MeshPhongMaterial({ color: 0xffff00 });
-    const textMesh = new THREE.Mesh(geometry, material);
+    const geometry = new THREE.BoxGeometry(20, 20, 20);
+    const lineGeometry = new THREE.EdgesGeometry(geometry);
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+    const line = new THREE.LineSegments(lineGeometry, lineMaterial);
+    const box = new THREE.Mesh(geometry, material);
+    const group = new THREE.Group();
+    group.add(box);
+    group.add(line);
+    this.scene.add(group);
+  }
 
-    geometry.computeBoundingBox();
-    geometry.boundingBox?.getCenter(textMesh.position).multiplyScalar(-1);
+  private createPlane(material: THREE.Material) {
+    const geometry = new THREE.PlaneGeometry(50, 50);
+    const plane = new THREE.Mesh(geometry, material);
+    plane.rotation.x = Math.PI / 2;
+    plane.name = "myPlane";
+    return plane;
+  }
 
-    const parent = new THREE.Object3D();
-    parent.add(textMesh);
-    this.text = parent;
+  private createHemiSphere() {
+    const material = new THREE.MeshPhongMaterial({
+      color: 0xbbbbbb,
+      shininess: 100,
+    });
+    const geometry = new THREE.SphereGeometry(
+      10,
+      32,
+      32,
+      0,
+      Math.PI * 2,
+      0,
+      Math.PI / 2
+    );
+    const sphere = new THREE.Mesh(geometry, material);
+    sphere.name = "mySphere";
+    return sphere;
+  }
 
-    this.scene.add(parent);
+  private createTorus() {
+    const material = new THREE.MeshPhongMaterial({
+      color: 0xbbbbbb,
+      shininess: 100,
+    });
+    const geometry = new THREE.TorusGeometry(3, 1, 16, 100);
+    const torus = new THREE.Mesh(geometry, material);
+    torus.name = "myTorus";
+    return torus;
+  }
+
+  private setupHelpers() {
+    const gridHelper = new THREE.GridHelper(100, 100, 0xffffff, 0x444444);
+    this.scene.add(gridHelper);
+
+    const axesHelper = new THREE.AxesHelper(100);
+    this.scene.add(axesHelper);
+  }
+
+  private setupControls() {
+    new OrbitControls(this.camera!, this.domApp!);
+  }
+
+  private setupRenderTarget() {
+    const rtWidth = 512;
+    const rtHeight = 512;
+    const renderTarget = new THREE.WebGLRenderTarget(rtWidth, rtHeight);
+    const rtCamera = new THREE.PerspectiveCamera(
+      75,
+      rtWidth / rtHeight,
+      0.1,
+      1000
+    );
+    rtCamera.position.y = 40;
+    rtCamera.lookAt(0, 0, 0);
+
+    const rtScene = new THREE.Scene();
+    // rtScene.background = new THREE.Color("red");
+    this.rtScene = rtScene;
+    this.rtCamera = rtCamera;
+    this.renderTarget = renderTarget;
+
+    const light = new THREE.AmbientLight(0x404040); // 부드러운 조명
+    this.rtScene!.add(light);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5); // 강한 조명 추가
+    directionalLight.position.set(10, 10, 10);
+    this.rtScene!.add(directionalLight);
+
+    const setupRTModels = () => {
+      const basicMaterial = new THREE.MeshBasicMaterial({
+        color: 0x808080,
+        side: THREE.DoubleSide,
+      });
+      const plane = this.createPlane(basicMaterial);
+      const hemiSphere = this.createHemiSphere();
+      this.rtScene!.add(plane);
+      this.rtScene!.add(hemiSphere);
+
+      for (let i = 0; i < 8; i++) {
+        const torusSystem = new THREE.Object3D();
+        const torus = this.createTorus();
+        torusSystem.add(torus);
+        torus.position.set(0, 4, 20);
+        torus.rotation.y = Math.PI / 2;
+        torusSystem.rotation.y = (i * Math.PI) / 4;
+        this.rtScene!.add(torusSystem);
+      }
+
+      const ballGeometry = new THREE.SphereGeometry(2, 32, 32);
+      const ballMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 });
+      const ball = new THREE.Mesh(ballGeometry, ballMaterial);
+      const ballSystem = new THREE.Object3D();
+      ballSystem.add(ball);
+      ball.position.set(0, 4, 20);
+      ballSystem.name = "ballSystem";
+      this.rtScene!.add(ballSystem);
+    };
+    setupRTModels();
   }
 
   private setupEvents() {
@@ -98,18 +192,18 @@ class App {
 
   private update(time: number) {
     time *= 0.001; // ms -> s
-    if (this.cube) {
-      this.cube.rotation.x = time;
-      this.cube.rotation.y = time;
-    }
-    if (this.text) {
-      this.text.rotation.x = time;
-      this.text.rotation.y = time;
+
+    const ball = this.rtScene!.getObjectByName("ballSystem") as THREE.Object3D;
+    if (ball) {
+      ball.rotation.y = Math.cos(time / 2) * Math.PI * 20;
     }
   }
 
   private render(time: number) {
     this.update(time);
+    this.renderer.setRenderTarget(this.renderTarget!);
+    this.renderer.render(this.rtScene!, this.rtCamera!);
+    this.renderer.setRenderTarget(null);
     this.renderer.render(this.scene, this.camera!);
   }
 }
